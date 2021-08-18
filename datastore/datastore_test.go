@@ -1978,7 +1978,7 @@ func TestRoundTrip(t *testing.T) {
 		} else {
 			got = reflect.New(reflect.TypeOf(tc.want).Elem()).Interface()
 		}
-		err = loadEntityProto(got, p)
+		err = loadEntityProto(got, p, 0)
 		if s := checkErr(tc.getErr, err); s != "" {
 			t.Errorf("%s: load: %s", tc.desc, s)
 			continue
@@ -2758,7 +2758,7 @@ func TestLoadSavePLS(t *testing.T) {
 		}
 
 		gota := reflect.New(reflect.TypeOf(tc.wantLoad).Elem()).Interface()
-		err = loadEntityProto(gota, e)
+		err = loadEntityProto(gota, e, 0)
 		if tc.loadErr == "" { // Want no error.
 			if err != nil {
 				t.Errorf("%s: load: %v", tc.desc, err)

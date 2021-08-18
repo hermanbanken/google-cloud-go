@@ -39,7 +39,8 @@ const (
 	greaterEq
 	greaterThan
 
-	keyFieldName = "__key__"
+	keyFieldName     = "__key__"
+	versionFieldName = "__version__"
 )
 
 var operatorToProto = map[operator]pb.PropertyFilter_Operator{
@@ -518,7 +519,7 @@ func (c *Client) GetAll(ctx context.Context, q *Query, dst interface{}) (keys []
 	}
 
 	for t := c.Run(ctx, q); ; {
-		k, e, err := t.next()
+		k, e, v, err := t.next()
 		if err == iterator.Done {
 			break
 		}
@@ -543,7 +544,7 @@ func (c *Client) GetAll(ctx context.Context, q *Query, dst interface{}) (keys []
 				x := reflect.MakeMap(elemType)
 				ev.Elem().Set(x)
 			}
-			if err = loadEntityProto(ev.Interface(), e); err != nil {
+			if err = loadEntityProto(ev.Interface(), e, v); err != nil {
 				if _, ok := err.(*ErrFieldMismatch); ok {
 					// We continue loading entities even in the face of field mismatch errors.
 					// If we encounter any other error, that other error is returned. Otherwise,
@@ -631,23 +632,23 @@ type Iterator struct {
 // stored for that key into the struct pointer or PropertyLoadSaver dst, with
 // the same semantics and possible errors as for the Get function.
 func (t *Iterator) Next(dst interface{}) (k *Key, err error) {
-	k, e, err := t.next()
+	k, e, v, err := t.next()
 	if err != nil {
 		return nil, err
 	}
 	if dst != nil && !t.keysOnly {
-		err = loadEntityProto(dst, e)
+		err = loadEntityProto(dst, e, v)
 	}
 	return k, err
 }
 
-func (t *Iterator) next() (*Key, *pb.Entity, error) {
+func (t *Iterator) next() (*Key, *pb.Entity, int64, error) {
 	// Fetch additional batches while there are no more results.
 	for t.err == nil && len(t.results) == 0 {
 		t.err = t.nextBatch()
 	}
 	if t.err != nil {
-		return nil, nil, t.err
+		return nil, nil, 0, t.err
 	}
 
 	// Extract the next result, update cursors, and parse the entity's key.
@@ -658,14 +659,14 @@ func (t *Iterator) next() (*Key, *pb.Entity, error) {
 		t.entityCursor = t.pageCursor // At the end of the batch.
 	}
 	if e.Entity.Key == nil {
-		return nil, nil, errors.New("datastore: internal error: server did not return a key")
+		return nil, nil, 0, errors.New("datastore: internal error: server did not return a key")
 	}
 	k, err := protoToKey(e.Entity.Key)
 	if err != nil || k.Incomplete() {
-		return nil, nil, errors.New("datastore: internal error: server returned an invalid key")
+		return nil, nil, 0, errors.New("datastore: internal error: server returned an invalid key")
 	}
 
-	return k, e.Entity, nil
+	return k, e.Entity, e.Version, nil
 }
 
 // nextBatch makes a single call to the server for a batch of results.

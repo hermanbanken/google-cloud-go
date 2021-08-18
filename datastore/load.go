@@ -434,11 +434,12 @@ func initField(val reflect.Value, index []int) reflect.Value {
 }
 
 // loadEntityProto loads an EntityProto into PropertyLoadSaver or struct pointer.
-func loadEntityProto(dst interface{}, src *pb.Entity) error {
+func loadEntityProto(dst interface{}, src *pb.Entity, version int64) error {
 	ent, err := protoToEntity(src)
 	if err != nil {
 		return err
 	}
+	ent.Version = version
 	return loadEntity(dst, ent)
 }
 
@@ -451,9 +452,16 @@ func loadEntity(dst interface{}, ent *Entity) error {
 		if e, ok := dst.(KeyLoader); ok {
 			keyLoadErr = e.LoadKey(ent.Key)
 		}
+		var versionLoadErr error
+		if e, ok := dst.(VersionLoader); ok {
+			versionLoadErr = e.LoadVersion(ent.Version)
+		}
 		loadErr := pls.Load(ent.Properties)
-		// Let any error returned by LoadKey prevail above any error from Load.
+		// Let any error returned by LoadKey prevail above any error from LoadVersion above any error from Load.
 		if keyLoadErr != nil {
+			return keyLoadErr
+		}
+		if versionLoadErr != nil {
 			return keyLoadErr
 		}
 		return loadErr
@@ -471,6 +479,12 @@ func loadEntityToStruct(dst interface{}, ent *Entity) error {
 	keyField := pls.codec.Match(keyFieldName)
 	if keyField != nil && ent.Key != nil {
 		pls.v.FieldByIndex(keyField.Index).Set(reflect.ValueOf(ent.Key))
+	}
+
+	// Try and load version.
+	versionField := pls.codec.Match(versionFieldName)
+	if versionField != nil && ent.Key != nil {
+		pls.v.FieldByIndex(versionField.Index).Set(reflect.ValueOf(ent.Version))
 	}
 
 	// Load properties.
@@ -520,7 +534,7 @@ func protoToEntity(src *pb.Entity) (*Entity, error) {
 		key, _ = protoToKey(src.Key)
 	}
 
-	return &Entity{key, props}, nil
+	return &Entity{Key: key, Properties: props}, nil
 }
 
 // propToValue returns a Go value that represents the PropertyValue. For

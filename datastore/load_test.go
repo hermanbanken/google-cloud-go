@@ -163,7 +163,7 @@ func TestLoadEntityNestedLegacy(t *testing.T) {
 
 	for _, tc := range testCases {
 		dst := reflect.New(reflect.TypeOf(tc.want).Elem()).Interface()
-		err := loadEntityProto(dst, tc.src)
+		err := loadEntityProto(dst, tc.src, 0)
 		if err != nil {
 			t.Errorf("loadEntityProto: %s: %v", tc.desc, err)
 			continue
@@ -406,7 +406,7 @@ func TestLoadEntityNested(t *testing.T) {
 
 	for _, tc := range testCases {
 		dst := reflect.New(reflect.TypeOf(tc.want).Elem()).Interface()
-		err := loadEntityProto(dst, tc.src)
+		err := loadEntityProto(dst, tc.src, 0)
 		if err != nil {
 			t.Errorf("loadEntityProto: %s: %v", tc.desc, err)
 			continue
@@ -552,7 +552,7 @@ func TestLoadToInterface(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := loadEntityProto(tc.dst, tc.src)
+			err := loadEntityProto(tc.dst, tc.src, 0)
 			if tc.wantErr != "" {
 				if err == nil || err.Error() != tc.wantErr {
 					t.Fatalf("Error mismatch\nGot:  %s\nWant: %s", err, tc.wantErr)
@@ -585,7 +585,7 @@ func TestTimezone(t *testing.T) {
 		Time: time.Unix(1605504600, 0).In(time.UTC),
 	}
 
-	err := loadEntityProto(dst, src)
+	err := loadEntityProto(dst, src, 0)
 	if err != nil {
 		t.Fatalf("loadEntityProto: %v", err)
 	}
@@ -676,7 +676,7 @@ func TestAlreadyPopulatedDst(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		err := loadEntityProto(tc.dst, tc.src)
+		err := loadEntityProto(tc.dst, tc.src, 0)
 		if err != nil {
 			t.Errorf("loadEntityProto: %s: %v", tc.desc, err)
 			continue
@@ -1089,7 +1089,77 @@ func TestKeyLoader(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		err := loadEntityProto(tc.dst, tc.src)
+		err := loadEntityProto(tc.dst, tc.src, 42)
+		if err != nil {
+			// While loadEntityProto may return an error, if that error is
+			// ErrFieldMismatch, then there is still data in tc.dst to compare.
+			if _, ok := err.(*ErrFieldMismatch); !ok {
+				t.Errorf("loadEntityProto: %s: %v", tc.desc, err)
+				continue
+			}
+		}
+
+		if !testutil.Equal(tc.want, tc.dst) {
+			t.Errorf("%s: compare:\ngot:  %+v\nwant: %+v", tc.desc, tc.dst, tc.want)
+		}
+	}
+}
+
+type VersionLoaderStruct struct {
+	A string
+	V int64
+}
+
+func (p *VersionLoaderStruct) Load(props []Property) error {
+	for _, pp := range props {
+		if pp.Name == "A" {
+			p.A = pp.Value.(string)
+		}
+	}
+	return nil
+}
+
+func (p *VersionLoaderStruct) LoadVersion(version int64) error {
+	p.V = version
+	return nil
+}
+
+func (p *VersionLoaderStruct) Save() (props []Property, err error) {
+	return []Property{{Name: "A", Value: p.A}}, nil
+}
+
+type NotPLSVersionLoader struct {
+	A string
+	V int64 `datastore:"__version__"`
+}
+
+func TestLoadVersion(t *testing.T) {
+	testCases := []struct {
+		desc string
+		src  *pb.EntityResult
+		dst  interface{}
+		want interface{}
+	}{
+		{
+			desc: "simple version loader",
+			src: &pb.EntityResult{
+				Version: 1337,
+				Entity: &pb.Entity{
+					Key: keyToProto(testKey0),
+					Properties: map[string]*pb.Value{
+						"A": {ValueType: &pb.Value_StringValue{StringValue: "hello"}},
+					}},
+			},
+			dst: &VersionLoaderStruct{},
+			want: &VersionLoaderStruct{
+				A: "hello",
+				V: 1337,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		err := loadEntityProto(tc.dst, tc.src.Entity, tc.src.Version)
 		if err != nil {
 			// While loadEntityProto may return an error, if that error is
 			// ErrFieldMismatch, then there is still data in tc.dst to compare.

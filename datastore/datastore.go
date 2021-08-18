@@ -452,7 +452,7 @@ func (c *Client) get(ctx context.Context, keys []*Key, dst interface{}, opts *pb
 			if multiArgType == multiArgTypeStructPtr && elem.IsNil() {
 				elem.Set(reflect.New(elem.Type().Elem()))
 			}
-			if err := loadEntityProto(elem.Interface(), e.Entity); err != nil {
+			if err := loadEntityProto(elem.Interface(), e.Entity, e.Version); err != nil {
 				multiErr[index] = err
 				any = true
 			}

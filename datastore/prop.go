@@ -70,6 +70,7 @@ type Property struct {
 // This type is only used for a Property's Value.
 type Entity struct {
 	Key        *Key
+	Version    int64
 	Properties []Property
 }
 
@@ -85,6 +86,14 @@ type KeyLoader interface {
 	// must also always implement PropertyLoadSaver.
 	PropertyLoadSaver
 	LoadKey(k *Key) error
+}
+
+// VersionLoader can store an EntityResult's Version.
+type VersionLoader interface {
+	// PropertyLoadSaver is embedded because a VersionLoader
+	// must also always implement PropertyLoadSaver.
+	PropertyLoadSaver
+	LoadVersion(v int64) error
 }
 
 // PropertyList converts a []Property to implement PropertyLoadSaver.
