@@ -35,6 +35,10 @@ func (m *Mutation) isDelete() bool {
 	return ok
 }
 
+func (m *Mutation) SetBaseVersion(version int64) {
+	m.mut.ConflictDetectionStrategy = &pb.Mutation_BaseVersion{BaseVersion: version}
+}
+
 // NewInsert creates a Mutation that will save the entity src into the
 // datastore with key k. If k already exists, calling Mutate with the
 // Mutation will lead to a gRPC codes.AlreadyExists error.
