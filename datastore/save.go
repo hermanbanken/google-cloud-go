@@ -365,8 +365,8 @@ func propertiesToProto(key *Key, props []Property) (*pb.Entity, error) {
 	}
 	indexedProps := 0
 	for _, p := range props {
-		// Do not send a Key value a field to datastore.
-		if p.Name == keyFieldName {
+		// Do not send a Key value or Version as field to datastore.
+		if p.Name == keyFieldName || p.Name == versionFieldName {
 			continue
 		}
 
